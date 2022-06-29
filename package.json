@@ -1,0 +1,22 @@
+{
+  "name": "stepfunctions-callback-pattern-credit-check.",
+  "version": "1.0.0",
+  "description": "Demonstrate Serverless Framework with Step Function callback to restart",
+  "dependencies": {
+    "serverless-step-functions": "^2.5.0"
+  },
+  "devDependencies": {
+    "serverless": "^2.72.3",
+    "serverless-pseudo-parameters": "^2.6.1"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gabrieltorreswm/stepfunctions-callback-pattern-credit-check"
+  },
+  "author": "Gabriel Torres <gabrieltorreswm@gmail.com>",
+  "license": "ISC",
+  "homepage": "https://github.com/gabrieltorreswm/stepfunctions-callback-pattern-credit-check"
+}

@@ -1,0 +1,98 @@
+service: callback-pattern-credit-check
+
+plugins:
+  - serverless-step-functions
+  - serverless-pseudo-parameters
+
+provider:
+  name: aws
+  runtime: python3.8
+  stage: ${opt:stage, 'dev'}
+  region: us-west-2
+  logRetentionInDays: 7
+  profile: contigoNew
+  lambdaHashingVersion: 20201221
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+      - states:SendTaskFailure
+      - states:SendTaskSuccess
+      Resource: "*"
+  environment:
+    SENDMESSAGE_TO_EXTERNALSYSTEM: ${self:custom.SENDMESSAGE_TO_EXTERNALSYSTEM}
+    QUEUE_URL_SENDMESSAGE_TO_EXTERNALSYSTEM : ${self:custom.QUEUE_URL_SENDMESSAGE_TO_EXTERNALSYSTEM}
+
+custom:
+  SENDMESSAGE_TO_EXTERNALSYSTEM: ${self:service}-${opt:stage,'dev'}-sendmessage_to_externalsystem
+  QUEUE_URL_SENDMESSAGE_TO_EXTERNALSYSTEM : !Ref ExternalSystem
+package:
+  include:
+  - handler.py
+
+functions:
+  CreditCheck:
+    handler: handler.creditCheck
+  Wallet:
+    handler: handler.wallet
+    events: 
+      - sqs:
+            arn: 
+              Fn::GetAtt:
+                - ExternalSystem
+                - Arn
+
+stepFunctions:
+  stateMachines:
+    CallbackExample:
+      events: # start the state machine with a simulated event GET /start
+        - http:
+            path: start
+            method: GET
+      definition:
+        StartAt: Credit Check
+        States:
+          Credit Check:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [CreditCheck,Arn]        
+            Next: Wait For Complete # the happy path
+          Wait For Complete:
+            Type: Task
+            Resource: arn:aws:states:::sqs:sendMessage.waitForTaskToken
+            Parameters:
+              QueueUrl: ${self:custom.QUEUE_URL_SENDMESSAGE_TO_EXTERNALSYSTEM}
+              MessageBody: 
+                input.$: "$"
+                taskToken.$: "$$.Task.Token"
+              # MessageAttributes:
+              #   taskToken:
+              #     DataType: String
+              #     StringValue: $$.Task.Token            
+            Next: Result # the happy path
+          Result:
+            Type: Choice
+            Choices:
+              - Variable: "$.credit_status"
+                BooleanEquals: true
+                Next: Approved
+              - Variable: "$.credit_status"
+                BooleanEquals: false
+                Next: Denied
+            Default: ErrorNotify
+          Approved:
+            Type: Pass
+            Next: SendMessage 
+          Denied:
+            Type: Pass
+            Next: SendMessage
+          ErrorNotify:
+            Type: Fail      
+          SendMessage:
+            Type: Pass 
+            End: true 
+resources:
+  Resources:
+    ExternalSystem:
+      Type: "AWS::SQS::Queue"
+      Properties:
+        QueueName: "${self:custom.SENDMESSAGE_TO_EXTERNALSYSTEM}"
